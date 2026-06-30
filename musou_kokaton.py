@@ -46,6 +46,7 @@ class Bird(pg.sprite.Sprite):
         pg.K_DOWN: (0, +1),
         pg.K_LEFT: (-1, 0),
         pg.K_RIGHT: (+1, 0),
+        pg.K_s: (0, 0)  
     }
 
     def __init__(self, num: int, xy: tuple[int, int]):
@@ -100,6 +101,51 @@ class Bird(pg.sprite.Sprite):
             self.dire = tuple(sum_mv)
             self.image = self.imgs[self.dire]
         screen.blit(self.image, self.rect)
+
+class Shield(pg.sprite.Sprite):
+    def __init__(self, bird:Bird, life:int):
+        super().__init__()
+        self.bird = bird
+        self.life = life
+        self._set_image()
+        self._update_position()
+
+    def _set_image(self):
+        vx, vy = self.bird.dire
+        if vx == 0 and vy == 0:
+            vx = 1
+        if abs(vx) > abs(vy):
+            base_size = (20, self.bird.rect.height * 2)
+            angle = 0 if vx > 0 else 180
+        elif abs(vx) < abs(vy):
+            base_size = (self.bird.rect.width * 2, 20)
+            angle = 0
+        else:
+            base_size = (self.bird.rect.width * 2, 20)
+            angle = math.degrees(math.atan2(-vy, vx))
+        image = pg.Surface(base_size, pg.SRCALPHA)
+        image.fill((0, 0, 255, 128))
+        self.image = pg.transform.rotate(image, angle)
+        self.rect = self.image.get_rect()
+
+    def _update_position(self):
+        vx, vy = self.bird.dire
+        if vx == 0 and vy == 0:
+            vx = 1
+        if abs(vx) >= abs(vy):
+            offset = self.bird.rect.width // 2 + self.rect.width // 2 + self.rect.width
+        else:
+            offset = self.bird.rect.height // 2 + self.rect.height // 2 + self.rect.height
+        self.rect.centerx = self.bird.rect.centerx + vx * offset
+        self.rect.centery = self.bird.rect.centery + vy                                      * offset
+
+    def update(self, bird:Bird):
+        self.life -= 1
+        if self.life < 0:
+            self.kill()
+            return
+        self._set_image()
+        self._update_position()
 
 
 class Bomb(pg.sprite.Sprite):
@@ -331,6 +377,7 @@ def main():
     emys = pg.sprite.Group()
     gravity = pg.sprite.Group()  # 重力場グループを追加
     emps = pg.sprite.Group()
+    shield_sprite = pg.sprite.Group()
 
     tmr = 0
     clock = pg.time.Clock()
@@ -342,16 +389,18 @@ def main():
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_SPACE:
                     beams.add(Beam(bird))
-            # 左シフトキー押下かつスコアが200より大きい場合、重力場を発動
-                if event.key == pg.K_LSHIFT and score.value > 200:
-                    score.value -= 200
+                # 左シフトキー押下かつスコアが10より大きい場合、重力場を発動
+                if event.key == pg.K_LSHIFT and score.value > 10:
+                    score.value -= 10
                     gravity.add(Gravity(400))
-            if event.type == pg.KEYDOWN and event.key == pg.K_e:
-                # eキーを押すとスコアを20消費してEMPを発動
-                if score.value > 20:
-                    score.value -= 20
-                    emps.add(EMP(emys, bombs))
-
+                if event.key == pg.K_e:
+                    # eキーを押すとスコアを20消費してEMPを発動
+                    if score.value > 20:
+                        score.value -= 20
+                        emps.add(EMP(emys, bombs))
+                if event.key == pg.K_s and score.value >= 50 and len(shield_sprite) == 0:
+                    shield_sprite.add(Shield(bird, 400))
+                    score.value -= 50
         screen.blit(bg_img, [0, 0])
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
@@ -400,9 +449,16 @@ def main():
         emys.update()
         emys.draw(screen)
         bombs.update()
+        collisions = pg.sprite.groupcollide(shield_sprite, bombs, True, True)
+        for bomb_list in collisions.values():
+            for bomb in bomb_list:
+                exps.add(Explosion(bomb, 50))
+                score.value += 1
         bombs.draw(screen)
         gravity.update()      # 重力場の更新
         gravity.draw(screen)  # 重力場の描画
+        shield_sprite.update(bird)
+        shield_sprite.draw(screen)
         exps.update()
         exps.draw(screen)
         emps.update()
