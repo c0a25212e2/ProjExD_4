@@ -188,14 +188,16 @@ class Beam(pg.sprite.Sprite):
     """
     ビームに関するクラス
     """
-    def __init__(self, bird: Bird):
+    def __init__(self, bird: Bird, angle0=0):
         """
         ビーム画像Surfaceを生成する
         引数 bird：ビームを放つこうかとん
+        引数 angle0：ビームの追加回転角度
         """
         super().__init__()
         self.vx, self.vy = bird.dire
         angle = math.degrees(math.atan2(-self.vy, self.vx))
+        angle += angle0
         self.image = pg.transform.rotozoom(pg.image.load(f"fig/beam.png"), angle, 1.0)
         self.vx = math.cos(math.radians(angle))
         self.vy = -math.sin(math.radians(angle))
@@ -213,6 +215,35 @@ class Beam(pg.sprite.Sprite):
         if check_bound(self.rect) != (True, True):
             self.kill()
 
+class NeoBeam:
+    """
+    複数方向にビームを発射するクラス
+    """
+    def __init__(self, bird: Bird, num: int):
+        """
+        引数1 bird：ビームを放つこうかとん
+        引数2 num：発射するビーム数
+        """
+        self.bird = bird
+        self.num = num
+
+    def gen_beams(self) -> list[Beam]:
+        """
+        -50度から+50度までの範囲で，指定された数のBeamインスタンスを生成し，
+        リストに追加して返す
+        """
+        beams = []
+
+        if self.num <= 1:
+            beams.append(Beam(self.bird))
+            return beams
+
+        step = 100 // (self.num - 1)
+
+        for angle in range(-50, +51, step):
+            beams.append(Beam(self.bird, angle))
+
+        return beams
 
 class Explosion(pg.sprite.Sprite):
     """
@@ -386,12 +417,17 @@ def main():
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return 0
+            
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_SPACE:
-                    beams.add(Beam(bird))
+                    
+                    if key_lst[pg.K_LSHIFT]:
+                        beams.add(*NeoBeam(bird,5).gen_beams())
+                    else:
+                        beams.add(Beam(bird))
                 # 左シフトキー押下かつスコアが10より大きい場合、重力場を発動
-                if event.key == pg.K_LSHIFT and score.value > 10:
-                    score.value -= 10
+                if event.key == pg.K_a and score.value > 200:
+                    score.value -= 200
                     gravity.add(Gravity(400))
                 if event.key == pg.K_e:
                     # eキーを押すとスコアを20消費してEMPを発動
